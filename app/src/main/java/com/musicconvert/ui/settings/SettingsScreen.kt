@@ -68,17 +68,8 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
 
     val settings by store.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
-    val versionName = remember {
-        runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrDefault("0.1.0")
-    }
 
     var ekeyCount by remember { mutableIntStateOf(container.ekeyStore.size) }
-
-    var checking by remember { mutableStateOf(false) }
-    var updateStatus by remember { mutableStateOf("当前 v${versionName ?: "0.1.0"}") }
-    var newVersion by remember { mutableStateOf<String?>(null) }
 
     val outputLabel = remember(settings.outputTreeUri) {
         settings.outputTreeUri?.let { raw ->
@@ -152,22 +143,6 @@ fun SettingsScreen() {
                 .padding(horizontal = 20.dp),
         ) {
             Column {
-                DropdownRow(
-                    title = "默认输出格式",
-                    value = settings.defaultFormat.label,
-                    options = OutputFormat.entries,
-                    labelOf = { it.label },
-                    onSelect = { scope.launch { store.setFormat(it) } },
-                )
-                if (settings.defaultFormat.supportsBitrate) {
-                    DropdownRow(
-                        title = "默认码率",
-                        value = "${settings.defaultBitrate} kbps",
-                        options = OutputFormat.BITRATES,
-                        labelOf = { "$it kbps" },
-                        onSelect = { scope.launch { store.setBitrate(it) } },
-                    )
-                }
                 SwitchRow(
                     title = "保留原始标签",
                     subtitle = "把源文件的标题/歌手/专辑写进新文件",
@@ -295,168 +270,6 @@ fun SettingsScreen() {
             )
         }
 
-        SectionTitle("关于")
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                InfoLine("版本", versionName ?: "0.1.0")
-                InfoLine("转换引擎", "FFmpeg 8.1（本地）")
-                Spacer(Modifier.height(8.dp))
-                GithubRow { openUrl(context, URL_GITHUB) }
-                UpdateRow(
-                    status = updateStatus,
-                    checking = checking,
-                    onClick = {
-                        if (checking) return@UpdateRow
-                        scope.launch {
-                            checking = true
-                            updateStatus = "正在检查…"
-                            when (val r = UpdateChecker.check(versionName ?: "0.1.0")) {
-                                is UpdateChecker.Result.Newer -> {
-                                    updateStatus = "发现 ${r.version}"
-                                    newVersion = r.version
-                                }
-
-                                UpdateChecker.Result.Latest -> updateStatus = "已是最新"
-                                is UpdateChecker.Result.Failed -> updateStatus = r.message
-                            }
-                            checking = false
-                        }
-                    },
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "所有转换与解密都在本机完成，不联网、不上传。仅用于处理你已合法获取的音频文件，请勿用于传播受版权保护的内容。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-
-    val pending = newVersion
-    if (pending != null) {
-        AlertDialog(
-            onDismissRequest = { newVersion = null },
-            title = { Text("发现新版本") },
-            text = { Text("$pending 已发布，当前版本 v${versionName ?: "0.1.0"}。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        newVersion = null
-                        openUrl(context, UpdateChecker.RELEASES_PAGE)
-                    },
-                ) { Text("去下载") }
-            },
-            dismissButton = {
-                TextButton(onClick = { newVersion = null }) { Text("以后再说") }
-            },
-        )
-    }
-}
-
-private const val URL_GITHUB = "https://github.com/piaomiaozhishang/uni-audio-convert"
-private const val URL_GITEE = "https://gitee.com/piaomiaozhishang/uni-audio-convert"
-
-@Composable
-private fun GithubRow(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = GithubVector,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = "开源地址",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = "GitHub",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun UpdateRow(status: String, checking: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !checking, onClick = onClick)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "检查更新",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        if (checking) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(14.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        } else {
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** GitHub 标记（24×24 的官方 path，用 PathParser 转成 Compose 矢量）。 */
-private val GithubVector: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "GitHub",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        addPath(
-            pathData = PathParser().parsePathString(GITHUB_PATH).toNodes(),
-            fill = SolidColor(Color.Black),
-        )
-    }.build()
-}
-
-private const val GITHUB_PATH =
-    "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 " +
-        "0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7" +
-        "c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 " +
-        "3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 " +
-        "1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 " +
-        "3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 " +
-        "3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 " +
-        "0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
-
-private fun openUrl(context: android.content.Context, url: String) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    }.onFailure {
-        Toast.makeText(context, "没有可用的浏览器", Toast.LENGTH_SHORT).show()
     }
 }
 

@@ -3,22 +3,17 @@ package com.musicconvert.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -29,24 +24,48 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.musicconvert.MusicConvertApp
+import com.musicconvert.ui.about.AboutScreen
 import com.musicconvert.ui.convert.ConvertScreen
+import com.musicconvert.ui.formats.FormatsScreen
 import com.musicconvert.ui.history.HistoryScreen
 import com.musicconvert.ui.player.MiniPlayer
 import com.musicconvert.ui.settings.SettingsScreen
+import kotlinx.coroutines.launch
+
+private data class Tab(val label: String, val icon: ImageVector)
+
+private val TABS = listOf(
+    Tab("转换", Icons.Default.PlayArrow),
+    Tab("历史", Icons.Default.DateRange),
+    Tab("关于", Icons.Default.Info),
+    Tab("设置", Icons.Default.Settings),
+)
 
 @Composable
 fun AppRoot() {
-    var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
     val player = remember { (context.applicationContext as MusicConvertApp).container.player }
+
+    var formatsOpen by rememberSaveable { mutableStateOf(false) }
+
+    if (formatsOpen) {
+        BackHandler { formatsOpen = false }
+        FormatsScreen(onBack = { formatsOpen = false })
+        return
+    }
+
+    val pagerState = rememberPagerState(pageCount = { TABS.size })
+    val scope = rememberCoroutineScope()
 
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -67,53 +86,39 @@ fun AppRoot() {
             Column {
                 MiniPlayer()
                 NavigationBar {
-                    NavigationBarItem(
-                        selected = tabIndex == 0,
-                        onClick = { tabIndex = 0 },
-                        icon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
-                        label = { Text("转换") },
-                    )
-                    NavigationBarItem(
-                        selected = tabIndex == 1,
-                        onClick = { tabIndex = 1 },
-                        icon = { Icon(Icons.Default.DateRange, contentDescription = null) },
-                        label = { Text("历史") },
-                    )
-                    NavigationBarItem(
-                        selected = tabIndex == 2,
-                        onClick = { tabIndex = 2 },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("设置") },
-                    )
+                    TABS.forEachIndexed { index, tab ->
+                        NavigationBarItem(
+                            selected = pagerState.currentPage == index,
+                            onClick = {
+                                scope.launch { pagerState.animateScrollToPage(index) }
+                            },
+                            icon = { Icon(tab.icon, contentDescription = null) },
+                            label = { Text(tab.label) },
+                        )
+                    }
                 }
             }
         },
     ) { innerPadding ->
-        Box(
-            Modifier
+        // 用 HorizontalPager 代替 AnimatedContent：分页位移由 graphicsLayer 驱动，
+        // 动画期间不会重建两个页面；预组合相邻页后手指一动就有画面。
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            AnimatedContent(
-                targetState = tabIndex,
-                transitionSpec = {
-                    // 按导航方向左右滑动：往右切新页从右边进，往左切反过来
-                    val forward = targetState > initialState
-                    val slideIn = slideInHorizontally(
-                        animationSpec = tween(280, easing = FastOutSlowInEasing)
-                    ) { width -> if (forward) width / 3 else -width / 3 }
-                    val slideOut = slideOutHorizontally(
-                        animationSpec = tween(280, easing = FastOutSlowInEasing)
-                    ) { width -> if (forward) -width / 3 else width / 3 }
-                    (slideIn + fadeIn(tween(200))) togetherWith (slideOut + fadeOut(tween(200)))
-                },
-                label = "tab",
-            ) { index ->
-                when (index) {
-                    0 -> ConvertScreen(onRequestNotificationPermission = requestNotification)
-                    1 -> HistoryScreen(onPlay = { uri, title -> player.play(uri, title) })
-                    else -> SettingsScreen()
-                }
+                .padding(innerPadding),
+            beyondViewportPageCount = 1,
+            key = { it },
+        ) { page ->
+            when (page) {
+                0 -> ConvertScreen(
+                    onRequestNotificationPermission = requestNotification,
+                    onOpenFormats = { formatsOpen = true },
+                )
+
+                1 -> HistoryScreen(onPlay = { uri, title -> player.play(uri, title) })
+                2 -> AboutScreen()
+                else -> SettingsScreen()
             }
         }
     }

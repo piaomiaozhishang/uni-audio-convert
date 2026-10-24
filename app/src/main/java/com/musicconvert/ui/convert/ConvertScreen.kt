@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -70,6 +71,7 @@ import kotlinx.coroutines.flow.first
 @Composable
 fun ConvertScreen(
     onRequestNotificationPermission: () -> Unit,
+    onOpenFormats: () -> Unit,
 ) {
     val context = LocalContext.current
     val container = (context.applicationContext as MusicConvertApp).container
@@ -99,18 +101,32 @@ fun ConvertScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 8.dp)) {
-            Text(
-                text = "音频转换",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "全格式互转 · 加密文件本地解密 · 不上传",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 12.dp, top = 20.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "音频转换",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "全格式互转 · 加密文件本地解密 · 不上传",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onOpenFormats) {
+                Icon(
+                    imageVector = Icons.Default.List,
+                    contentDescription = "支持的格式",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         if (tasks.isEmpty()) {
